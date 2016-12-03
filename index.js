@@ -61,78 +61,116 @@ function Release (options, callback) {
 
   // err if auth info not provided (token or user/pass)
   if (!getAuth(options)) return callback(new Error('missing auth info'))
-
-  // check if commit exists on remote
-  var getCommitOptions = extend(getAuth(options), {
+  
+  
+  var getReleasesOptions = extend(getAuth(options), {
     method: 'GET',
-    uri: API_ROOT + format('repos/%s/%s/git/commits/%s', options.owner, options.repo, options.target_commitish)
-  })
+    uri: API_ROOT + format('repos/%s/%s/releases', options.owner, options.repo)
+  })  
+  
+  // Get the releases
+  request(getReleasesOptions, function (err, res, body) {
+    const releases = body;
+    const release = releases.find(rel => rel.tag_name == options.tag_name);
+        
+    if (options.assets && release) {
+      var assets = options.assets.map(function (asset) {
+        return path.join(options.workpath, asset)
+      })
 
-  request(getCommitOptions, function (err, res, body) {
-    if (err || res.statusCode === 404) {
-      var errorMessage = format('Target commitish %s not found in %s/%s', options.target_commitish, options.owner, options.repo)
-      return callback(new Error(errorMessage))
-    }
-
-    var releaseOpts = extend(getAuth(options), {
-      uri: API_ROOT + format('repos/%s/%s/releases', options.owner, options.repo),
-      body: {
-        tag_name: options.tag_name,
-        target_commitish: options.target_commitish,
-        name: options.name,
-        body: options.body,
-        draft: options.draft,
-        prerelease: options.prerelease,
-        repo: options.repo,
-        owner: options.owner
-      }
-    })
-
-    if (options.dryRun) return callback(null, options)
-
-    request(releaseOpts, function (err, res, body) {
-      if (err) {
-        return callback(err)
+      var assetOptions = {
+        url: release.upload_url,
+        assets: assets
       }
 
-      if (body.errors) {
-        if (body.errors[0].code !== 'already_exists') {
-          return callback(body.errors)
-        }
-
-        var errorMessage = format('Release already exists for tag %s in %s/%s', options.tag_name, options.owner, options.repo)
-        return callback(new Error(errorMessage))
-      }
-
-      if (body.message === 'Bad credentials') {
-        return callback(new Error('GitHub says password is no beuno. please clear your cache manually. https://github.com/ungoldman/gh-release#config-location'))
-      }
-
-      if (options.assets) {
-        var assets = options.assets.map(function (asset) {
-          return path.join(options.workpath, asset)
-        })
-
-        var assetOptions = {
-          url: body.upload_url,
-          assets: assets
-        }
-
-        if (options.auth.token) {
-          assetOptions.token = options.auth.token
-        } else {
-          assetOptions.auth = options.auth
-        }
-
-        ghReleaseAssets(assetOptions, function (err) {
-          if (err) return callback(err)
-          return callback(null, body)
-        })
+      if (options.auth.token) {
+        assetOptions.token = options.auth.token
       } else {
-        callback(null, body)
+        assetOptions.auth = options.auth
       }
-    })
+
+      ghReleaseAssets(assetOptions, function (err) {
+        if (err) return callback(err)
+        return callback(null, body)
+      })
+    }
+    else{
+      console.log('No assets or matching release found.');
+    }
+  
   })
+  
+//  // check if commit exists on remote
+//  var getCommitOptions = extend(getAuth(options), {
+//    method: 'GET',
+//    uri: API_ROOT + format('repos/%s/%s/git/commits/%s', options.owner, options.repo, options.target_commitish)
+//  })
+//
+//  request(getCommitOptions, function (err, res, body) {
+//    if (err || res.statusCode === 404) {
+//      var errorMessage = format('Target commitish %s not found in %s/%s', options.target_commitish, options.owner, options.repo)
+//      return callback(new Error(errorMessage))
+//    }
+//
+//    var releaseOpts = extend(getAuth(options), {
+//      uri: API_ROOT + format('repos/%s/%s/releases', options.owner, options.repo),
+//      body: {
+//        tag_name: options.tag_name,
+//        target_commitish: options.target_commitish,
+//        name: options.name,
+//        body: options.body,
+//        draft: options.draft,
+//        prerelease: options.prerelease,
+//        repo: options.repo,
+//        owner: options.owner
+//      }
+//    })
+//
+//    if (options.dryRun) return callback(null, options)
+//
+//    request(releaseOpts, function (err, res, body) {
+//      if (err) {
+//        return callback(err)
+//      }
+//
+//      if (body.errors) {
+//        if (body.errors[0].code !== 'already_exists') {
+//          return callback(body.errors)
+//        }
+//
+//        var errorMessage = format('Release already exists for tag %s in %s/%s', options.tag_name, options.owner, options.repo)
+//        return callback(new Error(errorMessage))
+//      }
+//
+//      if (body.message === 'Bad credentials') {
+//        return callback(new Error('GitHub says password is no beuno. please clear your cache manually. https://github.com/ungoldman/gh-release#config-location'))
+//      }
+//
+//      if (options.assets) {
+//        var assets = options.assets.map(function (asset) {
+//          return path.join(options.workpath, asset)
+//        })
+//
+//        var assetOptions = {
+//          url: body.upload_url,
+//          assets: assets
+//        }
+//
+//        if (options.auth.token) {
+//          assetOptions.token = options.auth.token
+//        } else {
+//          assetOptions.auth = options.auth
+//        }
+//
+//        ghReleaseAssets(assetOptions, function (err) {
+//          if (err) return callback(err)
+//          return callback(null, body)
+//        })
+//      } else {
+//        callback(null, body)
+//      }
+//    })
+//  })
 }
 
 function validate (options) {
